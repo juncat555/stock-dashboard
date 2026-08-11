@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0e27">
+<title>🐕 狗狗看盘台 · 主力出货监测</title>
+
+<!-- TradingView Lightweight Charts (K线) -->
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<!-- Chart.js (辅助图：COST分布柱状图/出货动作雷达) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<style>
+:root {
+  --bg-primary: #0a0e27;
+  --bg-secondary: #131938;
+  --bg-card: #1a2150;
+  --bg-hover: #252d6a;
+  --accent-red: #ff4757;
+  --accent-green: #2ed573;
+  --accent-yellow: #ffa502;
+  --accent-blue: #5f8fff;
+  --accent-purple: #a55eea;
+  --text-primary: #ffffff;
+  --text-secondary: #b4b8d4;
+  --text-muted: #6c7293;
+  --border: #2a3170;
+  --shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: linear-gradient(135deg, #0a0e27 0%, #1a2150 100%);
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 12px;
+}
+
+/* 顶部状态栏 */
+.header {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.stock-input-wrap {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  background: var(--bg-card);
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.stock-input {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+  width: 90px;
+  outline: none;
+}
+
+.market-select {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  outline: none;
+}
+
+.btn {
+  background: var(--accent-blue);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn:hover { background: #4a7ce8; transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+
+.btn-refresh {
+  background: var(--accent-green);
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* 实时行情卡 */
+.quote-card {
+  flex: 1;
+  min-width: 200px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.quote-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.quote-price {
+  font-size: 28px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s;
+}
+
+.quote-price.up { color: var(--accent-red); }
+.quote-price.down { color: var(--accent-green); }
+.quote-price.flat { color: var(--text-primary); }
+
+.quote-change {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.quote-change.up { background: rgba(255,71,87,0.15); color: var(--accent-red); }
+.quote-change.down { background: rgba(46,213,115,0.15); color: var(--accent-green); }
+
+.quote-meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.quote-meta span { display: inline-flex; align-items: center; gap: 4px; }
+
+/* 主网格布局 */
+.main-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .main-grid { grid-template-columns: 1fr; }
+}
+
+.card {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-title::before {
+  content: '';
+  width: 4px;
+  height: 14px;
+  background: var(--accent-blue);
+  border-radius: 2px;
+}
+
+/* K线图容器 */
+.kline-wrap {
+  height: 380px;
+  position: relative;
+}
+
+#kline {
+  width: 100%;
+  height: 100%;
+}
+
+/* COST分布 */
+.cost-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.cost-item {
+  background: var(--bg-card);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.cost-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.cost-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.cost-deviation {
+  font-size: 11px;
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cost-deviation.up { color: var(--accent-red); }
+.cost-deviation.down { color: var(--accent-green); }
+
+/* 出货价位 */
+.price-level {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  background: var(--bg-card);
+  border-radius: 6px;
+  border-left: 4px solid;
+}
+
+.price-level.defense { border-color: var(--accent-green); }
+.price-level.take-profit { border-color: var(--accent-yellow); }
+.price-level.clear { border-color: var(--accent-red); }
+
+.price-level-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.price-level-value {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 信号/决策 */
+.signal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.signal-item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border-left: 3px solid var(--text-muted);
+}
+
+.signal-item.active {
+  background: rgba(255,71,87,0.1);
+  border-left-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.signal-item.warning {
+  background: rgba(255,165,2,0.1);
+  border-left-color: var(--accent-yellow);
+  color: var(--accent-yellow);
+}
+
+/* 决策大按钮 */
+.decision-card {
+  text-align: center;
+  padding: 16px;
+  border-radius: 10px;
+  margin-top: 10px;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.decision-持有, .decision-预警 {
+  background: rgba(46,213,115,0.15);
+  color: var(--accent-green);
+  border: 1px solid rgba(46,213,115,0.3);
+}
+
+.decision-减仓1\/2, .decision-减仓2\/3 {
+  background: rgba(255,165,2,0.15);
+  color: var(--accent-yellow);
+  border: 1px solid rgba(255,165,2,0.3);
+}
+
+.decision-清仓 {
+  background: rgba(255,71,87,0.15);
+  color: var(--accent-red);
+  border: 1px solid rgba(255,71,87,0.3);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* 状态栏 */
+.status-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  z-index: 100;
+}
+
+.status-bar .live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-bar .live::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: var(--accent-green);
+  border-radius: 50%;
+  animation: blink 1.5s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* 错误提示 */
+.error-toast {
+  background: rgba(255,71,87,0.2);
+  color: var(--accent-red);
+  padding: 10px;
+  border-radius: 6px;
+  margin: 10px 0;
+  font-size: 13px;
+  border: 1px solid rgba(255,71,87,0.3);
+}
+
+/* 加载状态 */
+.loading {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--accent-blue);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 推荐股票快选 */
+.quick-picks {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.quick-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: 14px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-chip:hover {
+  background: var(--accent-blue);
+  color: white;
+  border-color: var(--accent-blue);
+}
+
+/* 移动端适配 */
+@media (max-width: 600px) {
+  .container { padding: 8px; }
+  .quote-price { font-size: 22px; }
+  .kline-wrap { height: 280px; }
+  .header-row { gap: 8px; }
+  .quote-card { gap: 8px; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- 顶部：股票输入 + 实时行情 -->
+  <div class="header">
+    <div class="header-row">
+      <div class="stock-input-wrap">
+        <select class="market-select" id="marketSelect">
+          <option value="sz">SZ</option>
+          <option value="sh">SH</option>
+        </select>
+        <input type="text" class="stock-input" id="stockInput" value="002208" maxlength="6" placeholder="代码">
+        <button class="btn" onclick="loadStock()">查看</button>
+      </div>
+      <div class="quote-card">
+        <span class="quote-name" id="stockName">--</span>
+        <span class="quote-price flat" id="currentPrice">--</span>
+        <span class="quote-change flat" id="priceChange">--</span>
+        <div class="quote-meta">
+          <span>换手 <b id="turnoverRate">--</b>%</span>
+          <span>PE <b id="peRatio">--</b></span>
+          <span>市值 <b id="mktCap">--</b></span>
+        </div>
+      </div>
+      <button class="btn btn-refresh" onclick="refreshAll()">🔄 刷新</button>
+    </div>
+    <div class="quick-picks">
+      <span class="quick-chip" onclick="quickPick('sz','002208','合肥城建')">002208 合肥城建</span>
+      <span class="quick-chip" onclick="quickPick('sh','600519','贵州茅台')">600519 贵州茅台</span>
+      <span class="quick-chip" onclick="quickPick('sz','300750','宁德时代')">300750 宁德时代</span>
+      <span class="quick-chip" onclick="quickPick('sz','002594','比亚迪')">002594 比亚迪</span>
+      <span class="quick-chip" onclick="quickPick('sz','002415','海康威视')">002415 海康威视</span>
+      <span class="quick-chip" onclick="quickPick('sh','600030','中信证券')">600030 中信证券</span>
+      <span class="quick-chip" onclick="quickPick('sh','600036','招商银行')">600036 招商银行</span>
+      <span class="quick-chip" onclick="quickPick('sh','601318','中国平安')">601318 中国平安</span>
+    </div>
+  </div>
+
+  <!-- 主网格 -->
+  <div class="main-grid">
+    <!-- 左列：K线图 -->
+    <div>
+      <div class="card">
+        <div class="card-title">📈 K线 + 三层出货价位</div>
+        <div class="kline-wrap"><div id="kline"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">💰 COST(N) 多档可视化</div>
+        <canvas id="costChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <!-- 右列：COST数字 + 出货价位 + 信号 + 决策 -->
+    <div>
+      <div class="card">
+        <div class="card-title">📊 COST(N) 当前值</div>
+        <div class="cost-grid">
+          <div class="cost-item">
+            <div class="cost-label">COST(15) 主力峰下沿</div>
+            <div class="cost-value" id="cost15">--</div>
+            <div class="cost-deviation" id="cost15_dev">--</div>
+          </div>
+          <div class="cost-item">
+            <div class="cost-label">COST(50) 平均成本</div>
+            <div class="cost-value" id="cost50">--</div>
+            <div class="cost-deviation" id="cost50_dev">--</div>
+          </div>
+          <div class="cost-item">
+            <div class="cost-label">COST(85) 主力峰上沿</div>
+            <div class="cost-value" id="cost85">--</div>
+            <div class="cost-deviation" id="cost85_dev">--</div>
+          </div>
+          <div class="cost-item">
+            <div class="cost-label">COST(90) 获利盘抛压</div>
+            <div class="cost-value" id="cost90">--</div>
+            <div class="cost-deviation" id="cost90_dev">--</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🎯 三层出货价位（基于COST）</div>
+        <div class="price-level defense">
+          <span class="price-level-label">🛡️ 防守线 (COST50 × 0.965)</span>
+          <span class="price-level-value" id="defensePrice">--</span>
+        </div>
+        <div class="price-level take-profit">
+          <span class="price-level-label">💎 止盈区 [COST90, (85+90)/2]</span>
+          <span class="price-level-value" id="takeProfitRange">--</span>
+        </div>
+        <div class="price-level clear">
+          <span class="price-level-label">🚨 清仓线 (COST85 × 1.005)</span>
+          <span class="price-level-value" id="clearPrice">--</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🚨 主力出货动作识别</div>
+        <div class="signal-list" id="signalList">
+          <div class="signal-item">
+            <span>⏳ 等待数据...</span>
+          </div>
+        </div>
+        <div class="decision-card" id="decisionCard">分析中...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span class="live" id="liveStatus">实时连接中</span>
+  <span id="dataTime">--</span>
+  <span>🐕 狗狗看盘台 v1.0 · 数据源腾讯/新浪</span>
+</div>
+
+<script>
+// ====================================================================
+//  数据层
+// ====================================================================
+
+const TX_REALTIME = 'https://qt.gtimg.cn/q=';          // 实时行情
+const TX_HISKLINE = 'https://web.ifzq.gtimg.cn/appstock/app/fqkline/get';  // 历史K线
+const SINA_HISKLINE = 'https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData';  // 备用
+
+let currentCode = '';
+let currentMarket = 'sz';
+let realtimeTimer = null;
+let klineData = [];
+let costData = { c15: 0, c50: 0, c85: 0, c90: 0 };
+let priceLevels = { defense: 0, tp_lo: 0, tp_hi: 0, clear: 0 };
+
+// ====================================================================
+//  实时行情（脚本注入绕过CORS）
+// ====================================================================
+function fetchRealtime(code, market) {
+  return new Promise((resolve) => {
+    const fullCode = market + code;
+    const script = document.createElement('script');
+    script.src = TX_REALTIME + fullCode + '?t=' + Date.now();
+    script.onload = () => {
+      try {
+        const dataStr = window['v_' + fullCode];
+        if (!dataStr) throw new Error('数据为空');
+        const parts = dataStr.split('~');
+        // 字段索引（已与腾讯实时接口实测对齐）：
+        // [3]=当前价 [4]=昨收 [30]=时间 [31]=涨跌额 [32]=涨跌幅%
+        // [33]=最高 [34]=最低 [37]=成交额(万) [38]=换手率% [39]=PE
+        // [43]=振幅% [44]=流通市值(亿) [45]=总市值(亿)
+        resolve({
+          name: parts[1],
+          code: parts[2],
+          price: parseFloat(parts[3]),
+          prevClose: parseFloat(parts[4]),
+          open: parseFloat(parts[5]),
+          volume: parseInt(parts[6]) * 100,  // 手→股
+          change: parseFloat(parts[31]),
+          changePct: parseFloat(parts[32]),
+          high: parseFloat(parts[33]),
+          low: parseFloat(parts[34]),
+          amount: parseFloat(parts[37] || 0),  // 成交额（万）
+          turnover: parseFloat(parts[38] || 0),  // 换手率%
+          pe: parseFloat(parts[39] || 0),
+          amplitude: parseFloat(parts[43] || 0),
+          mktCap: parseFloat(parts[44] || 0),  // 流通市值（亿）
+        });
+      } catch (e) {
+        resolve({ error: e.message });
+      }
+      document.body.removeChild(script);
+    };
+    script.onerror = () => {
+      resolve({ error: '实时数据请求失败' });
+      document.body.removeChild(script);
+    };
+    document.body.appendChild(script);
+  });
+}
+
+// ====================================================================
+//  历史K线（脚本注入绕过CORS）
+// ====================================================================
+function fetchKLine(code, market, days = 240) {
+  return new Promise((resolve) => {
+    const fullCode = market + code;
+    const url = `${TX_HISKLINE}?_var=kline_dayqfq&param=${fullCode},day,,,${days},qfq&t=${Date.now()}`;
+    const script = document.createElement('script');
+    script.src = url;
+    script.onload = () => {
+      // 腾讯K线JSONP返回 kline_dayqfq={...};
+      // window['kline_dayqfq'] 已是解析好的对象，不要再JSON.parse！
+      const klineKey = Object.keys(window).find(k => k.startsWith('kline_dayqfq') && typeof window[k] === 'object');
+      try {
+        if (!klineKey) throw new Error('K线数据为空');
+        const data = window[klineKey];
+        const raw = data.data[fullCode].qfqday || data.data[fullCode].day;
+        if (!raw || raw.length === 0) throw new Error('K线数据为空');
+        const klines = raw.slice(-days).map(r => ({
+          date: r[0],
+          open: parseFloat(r[1]),
+          close: parseFloat(r[2]),
+          high: parseFloat(r[3]),
+          low: parseFloat(r[4]),
+          vol: parseFloat(r[5]) * 100,
+        }));
+        resolve(klines);
+      } catch (e) {
+        resolve({ error: e.message });
+      }
+      if (klineKey) delete window[klineKey];
+      document.body.removeChild(script);
+    };
+    script.onerror = () => {
+      resolve({ error: 'K线请求失败' });
+      document.body.removeChild(script);
+    };
+    document.body.appendChild(script);
+  });
+}
+
+// ====================================================================
+//  芯片分布近似算法（前端版）
+//  说明：用近20日VWAP代替COST(50)、近60日分位数代替COST(85/15/90)
+// ====================================================================
+function calcCostApprox(klines) {
+  if (klines.length < 60) {
+    // 数据不足时退化为短周期
+  }
+  const closes = klines.map(k => k.close);
+  const highs = klines.map(k => k.high);
+  const lows = klines.map(k => k.low);
+  const vols = klines.map(k => k.vol);
+
+  // COST(50): 近20日VWAP
+  const v20 = klines.slice(-20);
+  const volSum = v20.reduce((s, k) => s + k.vol, 0);
+  const cost50 = v20.reduce((s, k) => s + k.close * k.vol, 0) / volSum;
+
+  // COST(85/15/90): 近60日价格分位数
+  const sorted60 = klines.slice(-60).map(k => k.close).sort((a, b) => a - b);
+  const len = sorted60.length;
+  const pick = (p) => sorted60[Math.floor(len * p / 100)];
+  const cost15 = pick(15);
+  const cost85 = pick(85);
+  const cost90 = pick(90);
+
+  return {
+    c15: cost15,
+    c50: cost50,
+    c85: cost85,
+    c90: cost90,
+    defense: cost50 * 0.965,
+    tp_lo: cost90,
+    tp_hi: (cost85 + cost90) / 2,
+    clear: cost85 * 1.005,
+  };
+}
+
+// ====================================================================
+//  信号检测（前端近似版，对应Phase 1.5 v3 ATR自适应）
+// ====================================================================
+function detectSignals(klines, cost, atr) {
+  if (klines.length < 5) return { signals: [], strength: 0 };
+  const last = klines[klines.length - 1];
+  const prev = klines[klines.length - 2];
+  const signals = [];
+  let strength = 0;
+
+  // ATR自适应阈值
+  const thrBreak = Math.max(0.02, atr * 1.5);
+  const thrFall = Math.max(0.02, atr * 1.5);
+
+  // 1. 突破主力成本
+  if (cost.c85 > 0) {
+    const dev = (last.close - cost.c85) / cost.c85;
+    if (dev > thrBreak) { signals.push(`突破主力成本 ${(dev*100).toFixed(1)}%`); strength++; }
+  }
+  // 2. 突破短期主力
+  if (cost.c90 > 0) {
+    const dev = (last.close - cost.c90) / cost.c90;
+    if (dev > thrBreak) { signals.push(`突破获利盘抛压 ${(dev*100).toFixed(1)}%`); strength++; }
+  }
+  // 3. 跌破平均成本
+  if (cost.c50 > 0 && last.close < cost.c50 * (1 - thrFall)) {
+    signals.push(`跌破平均成本 ${((1 - last.close/cost.c50)*100).toFixed(1)}%`);
+    strength++;
+  }
+  // 4. 突破平均成本
+  if (cost.c50 > 0 && last.close > cost.c50 * (1 + thrBreak)) {
+    signals.push(`突破平均成本 ${((last.close/cost.c50 - 1)*100).toFixed(1)}%`);
+    strength++;
+  }
+  // 5. 放量
+  const recent5 = klines.slice(-6, -1);
+  if (recent5.length === 5) {
+    const avgVol = recent5.reduce((s, k) => s + k.vol, 0) / 5;
+    if (avgVol > 0 && last.vol > avgVol * Math.max(1.5, atr * 50)) {
+      signals.push(`放量 ${(avgVol/1e6).toFixed(2)}M→${(last.vol/1e6).toFixed(2)}M`);
+      strength++;
+    }
+  }
+  // 6. 高位滞涨（疑似出货）
+  if (last.close > cost.c90 && Math.abs(last.close - prev.close) / prev.close < 0.005 && last.vol > 1e6) {
+    signals.push(`⚠️ 高位滞涨（疑似出货）`);
+    strength++;
+  }
+  // 7. 长上影线（主力试盘/出货）
+  const upperWick = (last.high - Math.max(last.open, last.close)) / last.close;
+  if (upperWick > 0.025 && last.close < cost.c85) {
+    signals.push(`长上影线 ${(upperWick*100).toFixed(1)}%（主力试盘）`);
+    strength++;
+  }
+  // 8. 大阴线
+  if (last.close < prev.close * 0.97 && last.vol > 1e6) {
+    signals.push(`大阴线 ${((last.close/prev.close - 1)*100).toFixed(1)}%`);
+    strength++;
+  }
+
+  return { signals, strength };
+}
+
+// 计算ATR(14)
+function calcATR(klines, n = 14) {
+  if (klines.length < n + 1) return 0.02;
+  const trs = [];
+  for (let i = klines.length - n; i < klines.length; i++) {
+    const h = klines[i].high;
+    const l = klines[i].low;
+    const cPrev = klines[i-1].close;
+    trs.push(Math.max(h - l, Math.abs(h - cPrev), Math.abs(l - cPrev)));
+  }
+  const atr = trs.reduce((s, v) => s + v, 0) / n;
+  return atr / klines[klines.length - 1].close;  // 百分比
+}
+
+function getDecision(strength) {
+  if (strength <= 1) return '持有';
+  if (strength === 2) return '预警';
+  if (strength === 3) return '减仓1/2';
+  if (strength === 4) return '减仓2/3';
+  return '清仓';
+}
+
+// ====================================================================
+//  K线图（TradingView Lightweight Charts）
+// ====================================================================
+let klineChart = null;
+
+function initKLine() {
+  const container = document.getElementById('kline');
+  klineChart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: container.clientHeight,
+    layout: {
+      background: { type: 'solid', color: 'transparent' },
+      textColor: '#b4b8d4',
+      fontSize: 11,
+    },
+    grid: {
+      vertLines: { color: 'rgba(42, 49, 112, 0.3)' },
+      horzLines: { color: 'rgba(42, 49, 112, 0.3)' },
+    },
+    rightPriceScale: {
+      borderColor: '#2a3170',
+    },
+    timeScale: {
+      borderColor: '#2a3170',
+      timeVisible: false,
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+    },
+  });
+
+  const candleSeries = klineChart.addCandlestickSeries({
+    upColor: '#ff4757',
+    downColor: '#2ed573',
+    borderUpColor: '#ff4757',
+    borderDownColor: '#2ed573',
+    wickUpColor: '#ff4757',
+    wickDownColor: '#2ed573',
+  });
+
+  window.candleSeries = candleSeries;
+
+  // 响应式
+  window.addEventListener('resize', () => {
+    klineChart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
+  });
+
+  return candleSeries;
+}
+
+function renderKLine(klines) {
+  if (!window.candleSeries) return;
+  const data = klines.map(k => ({
+    time: k.date.substring(0, 10),
+    open: k.open,
+    high: k.high,
+    low: k.low,
+    close: k.close,
+  }));
+  window.candleSeries.setData(data);
+
+  // 三层出货价位线（用priceLine API）
+  if (priceLevels.defense > 0) {
+    window.candleSeries.createPriceLine({
+      price: priceLevels.defense,
+      color: '#2ed573',
+      lineWidth: 1,
+      lineStyle: 2,
+      axisLabelVisible: true,
+      title: '防守',
+    });
+  }
+  if (priceLevels.tp_hi > 0) {
+    window.candleSeries.createPriceLine({
+      price: priceLevels.tp_hi,
+      color: '#ffa502',
+      lineWidth: 1,
+      lineStyle: 2,
+      axisLabelVisible: true,
+      title: '止盈',
+    });
+  }
+  if (priceLevels.clear > 0) {
+    window.candleSeries.createPriceLine({
+      price: priceLevels.clear,
+      color: '#ff4757',
+      lineWidth: 2,
+      lineStyle: 2,
+      axisLabelVisible: true,
+      title: '清仓',
+    });
+  }
+}
+
+// ====================================================================
+//  COST柱状图（Chart.js）
+// ====================================================================
+let costChartInstance = null;
+
+function renderCostChart(cost) {
+  const ctx = document.getElementById('costChart').getContext('2d');
+  if (costChartInstance) costChartInstance.destroy();
+  costChartInstance = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['COST(15)', 'COST(50)', 'COST(85)', 'COST(90)'],
+      datasets: [{
+        label: '价位',
+        data: [cost.c15, cost.c50, cost.c85, cost.c90],
+        backgroundColor: ['#a55eea', '#5f8fff', '#ffa502', '#ff4757'],
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${ctx.parsed.y.toFixed(2)} 元`
+          }
+        }
+      },
+      scales: {
+        y: {
+          ticks: { color: '#b4b8d4' },
+          grid: { color: 'rgba(42, 49, 112, 0.3)' }
+        },
+        x: {
+          ticks: { color: '#b4b8d4' }
+        }
+      }
+    }
+  });
+}
+
+// ====================================================================
+//  UI渲染
+// ====================================================================
+function renderQuote(q) {
+  if (q.error) {
+    showError('实时行情: ' + q.error);
+    return;
+  }
+  document.getElementById('stockName').textContent = q.name || currentCode;
+  const priceEl = document.getElementById('currentPrice');
+  priceEl.textContent = q.price.toFixed(2);
+  priceEl.className = 'quote-price ' + (q.change > 0 ? 'up' : q.change < 0 ? 'down' : 'flat');
+
+  const changeEl = document.getElementById('priceChange');
+  changeEl.textContent = (q.change >= 0 ? '+' : '') + q.change.toFixed(2) + ' (' + (q.changePct >= 0 ? '+' : '') + q.changePct.toFixed(2) + '%)';
+  changeEl.className = 'quote-change ' + (q.change > 0 ? 'up' : q.change < 0 ? 'down' : 'flat');
+
+  document.getElementById('turnoverRate').textContent = q.turnover.toFixed(2);
+  document.getElementById('peRatio').textContent = q.pe ? q.pe.toFixed(2) : '--';
+  document.getElementById('mktCap').textContent = q.mktCap ? q.mktCap.toFixed(1) + '亿' : '--';
+}
+
+function renderCost(cost) {
+  document.getElementById('cost15').textContent = cost.c15.toFixed(2);
+  document.getElementById('cost50').textContent = cost.c50.toFixed(2);
+  document.getElementById('cost85').textContent = cost.c85.toFixed(2);
+  document.getElementById('cost90').textContent = cost.c90.toFixed(2);
+
+  // 偏离度
+  const lastPrice = parseFloat(document.getElementById('currentPrice').textContent);
+  const setDev = (id, base) => {
+    if (lastPrice > 0 && base > 0) {
+      const dev = (lastPrice - base) / base * 100;
+      const el = document.getElementById(id);
+      el.textContent = (dev >= 0 ? '+' : '') + dev.toFixed(2) + '%';
+      el.className = 'cost-deviation ' + (dev > 0 ? 'up' : 'down');
+    }
+  };
+  setDev('cost15_dev', cost.c15);
+  setDev('cost50_dev', cost.c50);
+  setDev('cost85_dev', cost.c85);
+  setDev('cost90_dev', cost.c90);
+}
+
+function renderPriceLevels(levels) {
+  document.getElementById('defensePrice').textContent = levels.defense.toFixed(2);
+  document.getElementById('takeProfitRange').textContent = levels.tp_lo.toFixed(2) + ' ~ ' + levels.tp_hi.toFixed(2);
+  document.getElementById('clearPrice').textContent = levels.clear.toFixed(2);
+}
+
+function renderSignals(sigs) {
+  const list = document.getElementById('signalList');
+  if (sigs.signals.length === 0) {
+    list.innerHTML = '<div class="signal-item"><span>✅ 无出货信号</span></div>';
+  } else {
+    list.innerHTML = sigs.signals.map(s => {
+      let cls = 'active';
+      if (s.includes('突破') || s.includes('放量')) cls = 'warning';
+      return `<div class="signal-item ${cls}"><span>${s}</span></div>`;
+    }).join('');
+  }
+  const dec = getDecision(sigs.strength);
+  const card = document.getElementById('decisionCard');
+  card.className = 'decision-card decision-' + dec.replace('1/2', '1\\/2').replace('2/3', '2\\/3');
+  card.innerHTML = `建议动作：${dec} <span style="font-size:12px;color:#999;font-weight:400;">(信号强度 ${sigs.strength})</span>`;
+}
+
+function showError(msg) {
+  const existing = document.querySelector('.error-toast');
+  if (existing) existing.remove();
+  const el = document.createElement('div');
+  el.className = 'error-toast';
+  el.textContent = '⚠️ ' + msg;
+  document.querySelector('.container').insertBefore(el, document.querySelector('.main-grid'));
+  setTimeout(() => el.remove(), 5000);
+}
+
+// ====================================================================
+//  主流程
+// ====================================================================
+async function loadStock() {
+  const code = document.getElementById('stockInput').value.trim().padStart(6, '0');
+  const market = document.getElementById('marketSelect').value;
+  if (!/^\d{6}$/.test(code)) {
+    showError('股票代码必须是6位数字');
+    return;
+  }
+
+  currentCode = code;
+  currentMarket = market;
+
+  document.getElementById('liveStatus').innerHTML = '<span class="loading"></span> 加载中...';
+  document.getElementById('signalList').innerHTML = '<div class="signal-item"><span class="loading"></span> 计算中...</div>';
+
+  try {
+    // 1. 拉历史K线
+    const klines = await fetchKLine(code, market);
+    if (klines.error) throw new Error('K线: ' + klines.error);
+    klineData = klines;
+
+    // 2. 算COST + 信号
+    costData = calcCostApprox(klines);
+    priceLevels = {
+      defense: costData.defense,
+      tp_lo: costData.tp_lo,
+      tp_hi: costData.tp_hi,
+      clear: costData.clear,
+    };
+    const atr = calcATR(klines);
+    const sigs = detectSignals(klines, costData, atr);
+
+    // 3. 拉实时行情
+    const quote = await fetchRealtime(code, market);
+
+    // 4. 渲染
+    renderKLine(klines);
+    renderCostChart(costData);
+    renderCost(costData);
+    renderPriceLevels(priceLevels);
+    renderSignals(sigs);
+    renderQuote(quote);
+
+    document.getElementById('dataTime').textContent = new Date().toLocaleString('zh-CN');
+    document.getElementById('liveStatus').textContent = '实时连接中';
+
+    // 启动定时刷新（实时行情每5秒）
+    if (realtimeTimer) clearInterval(realtimeTimer);
+    realtimeTimer = setInterval(async () => {
+      const q = await fetchRealtime(code, market);
+      renderQuote(q);
+    }, 5000);
+
+  } catch (e) {
+    showError(e.message);
+    document.getElementById('liveStatus').textContent = '加载失败';
+  }
+}
+
+function quickPick(market, code, name) {
+  document.getElementById('marketSelect').value = market;
+  document.getElementById('stockInput').value = code;
+  loadStock();
+}
+
+function refreshAll() {
+  loadStock();
+}
+
+// 回车提交
+document.getElementById('stockInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') loadStock();
+});
+
+// 启动
+window.addEventListener('load', () => {
+  initKLine();
+  loadStock();
+});
+</script>
+</body>
+</html>
